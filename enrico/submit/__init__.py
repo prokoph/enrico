@@ -33,7 +33,10 @@ def jobs_in_queue():
     """ Returns the number of jobs this user has in the queue """
     from subprocess import Popen, PIPE
     user = os.environ['USER']
-    fh = Popen("qstat -u {user}".format(user=user), stdout=PIPE, shell=True)
+    if environ.FARM=="LUNARC":
+        fh = Popen("squeue -u {user}".format(user=user), stdout=PIPE, shell=True)
+    else:
+        fh = Popen("qstat -u {user}".format(user=user), stdout=PIPE, shell=True)
     njobs = len(fh.stdout.readlines())
     # If there are no jobs we will get 0 lines.
     # If there are jobs there will be two extra header lines.
@@ -54,13 +57,15 @@ def wait_for_slot(max_jobs):
 def GetSubCmd():
   cmd = {'LAPP' :    ['qsub -V','-l mem=4096mb'],
          'MPIK' :    ['qsub'],
-         'CCIN2P3' : ['qsub','-l ct=24:00:00 -l vmem=4G -l fsize=20G -l sps=1 -l os=sl6 -P P_hess']}
+         'CCIN2P3' : ['qsub','-l ct=24:00:00 -l vmem=4G -l fsize=20G -l sps=1 -l os=sl6 -P P_hess'],
+         'LUNARC' :  ['sbatch','-t 7-00:00:00 --mem=6000']}
   return cmd[environ.FARM]
 
 def GetSubOutput(qsub_log):
   cmd = {'LAPP' :    ['-o', qsub_log, '-j', 'oe'],
          'MPIK' :    ['-o', qsub_log, '-j', 'y'],
-         'CCIN2P3' : ['-o', qsub_log, '-e', qsub_log, '-j', 'yes']}
+         'CCIN2P3' : ['-o', qsub_log, '-e', qsub_log, '-j', 'yes'],
+         'LUNARC' :  ['-o', qsub_log]}
   return cmd[environ.FARM]
 ###
 
@@ -102,6 +107,8 @@ def call(cmd,
         max_jobs = 1000
     elif environ.FARM=="CCIN2P3":
         max_jobs = 3500
+    elif environ.FARM=="LUNARC":
+        max_jobs = 300
 
     # The following steps are different if you submit or not
     if submit:
@@ -133,7 +140,10 @@ def call(cmd,
             if environ.FARM=="CCIN2P3":
                 if jobname[0].isdigit():
                     jobname='_'+jobname
-            cmd += ['-N', jobname]
+            if environ.FARM=="LUNARC":
+                cmd += ['--job-name', jobname]
+            else:
+                cmd += ['-N', jobname]
 
         if scriptfile == None:
             # Note that mkstemp() returns an int,
